@@ -1,2 +1,119 @@
 # PROJECT_Escrow
 Contains the code for escrow project using solidity(ethereum)
+pragma solidity ^0.5.6;
+
+//------------------------------------------------------------------------------------------------------
+//A contract to function as an escrow (To overcome the problem of centalisation in traditional escrows)
+//------------------------------------------------------------------------------------------------------
+
+contract Escrow
+{
+    address payable buyer;              //Creating a buyer who is given the rights to pay. 
+    
+    address payable seller;             //Creating an seller who is given the rights to pay.
+    
+    bool public buyerOK;                //Creating a variable of bool type for buyer--used to indicate if buyer has received the product
+
+    bool public sellerOK;               //Creating a variable of bool type for seller--used to indaicate if seller has sent the product to the buyer
+    
+    event notify(string notification);  //Creating an event which is used to throw a message.
+    
+    uint balance;                       //Used to store the amount deposited by the buyer
+    
+    uint start;                         //Used to store the creation time of the block
+    
+    uint end;                           //Used to store the deadline time for the deposit to be available in the escrow(contract)
+    
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    //Defining the constructor for this contract--initialise the buyer and the seller--buyer is the person who usually deploys the contract 
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    
+    constructor (address payable _seller) public
+    {
+        buyer=msg.sender;       //buyer is initialised with msg.sender because buyer will deploy the contract
+        seller=_seller;         //The seller's address passed as an argument is assigned to seller. 
+    }    
+    
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    //Creating a fallback function(Function with no name)--Used by the buyer to deposit the amount in Escrow account(ie) contract
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    
+    function ()payable external
+    {
+        require(msg.sender==buyer,"Can only be accessed by the buyer");                             //Make sures that only buyer makes the payment
+            require(msg.value>10,"Please enter a valid amount..");                                  //Checks for a valid deposit
+                    balance=msg.value;                                                              //Stores the buyer's amount in the contract(escrow) 
+                    start=block.timestamp;                                                          //Initialises the variable start with the creation time of the block
+                    emit notify("Buyer has deposited the required amount in the Escrow account");   //Used to notify that the amount has been deposited
+    }
+    
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    //A function used by the buyer to confirm that he has received the delivery and then transfer the amount to the seller.
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    
+    function b_delivery_received() public payable
+    {
+        require(msg.sender==buyer);                     //Checks if the message sender is buyer
+            buyerOK=true;                               //Changes the state of buyerOK to true
+        if(sellerOK==true)                              //Checks if the seller has sent the product
+            release_fund();                             //After makes sure the above step the amount is transferred to the seller's account
+    }
+    
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    //A function used to release the escrow amount to the seller.
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    
+    function release_fund()private
+    {
+            if(buyerOK&&sellerOK)                               //Checks if both buyer has placed the amount in escrow and seller has sent the product
+                seller.transfer((address(this).balance));       //The amount is transferred to the seller
+    }
+    
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    //A function used by the seller to  deny the service.
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    
+    function seller_deny_service() public
+    {
+        require(msg.sender==seller,"Sorry...I am not pleased...");          //Checks if the message sender is seller
+            buyer.transfer(address(this).balance);                          //If the previous step is yes then the amount will be trasnferred back to the buyer
+    }
+    
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    //A function used by the seller to send product(not via contract) by making sure that buyer has placed the amount in the escrow.
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    
+    function seller_send_product() public payable
+    {
+        require(msg.sender==seller,"Can be accessed only by sender");           //Checks if the message sender is seller
+                    sellerOK=true;                                              //If the previous step is true then it changes the state of sellerOK
+    }
+    
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    //A function used by both buyer and the seller to the balance in the escrow.
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    
+    function escrow_balance()public view returns (uint)
+    {
+        return address(this).balance;           //returns the account balance.
+    }
+    
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    //This function allows the buyer to withdraw the amount before the seller sends the product.
+    //--------------------------------------------------------------------------------------------------------------------------------------
+    
+    function withdraw_amount() public 
+    {
+        end=block.timestamp;                                                             //Stores the time of the current block
+            require(msg.sender==buyer);                                                  //Checks if the message sender is buyer
+                if(buyerOK==false&&sellerOK==true)                                       //Conditions (sellerOK and buyerOK) are checked if buyer tries to manipulate the rules(withdrawing the amount after receiving the product)                                                                          
+                    seller.transfer(address(this).balance);                              //Amount transferred to seller
+                else if(buyerOK&&!sellerOK&&end>start+172800)                            //The amount will remain in the escrow for a maximum of 30 days
+                {
+                        require(address(this).balance!=0,"Already money transferred");   //Checks if the balance is zero
+                        buyer.transfer(address(this).balance);                           //Transfers the amount to the buyer
+                        balance=0;                                                       //After transferring the amount the balance is made as zero
+                }
+    }
+    
+}
